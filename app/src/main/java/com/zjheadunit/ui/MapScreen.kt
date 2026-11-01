@@ -58,19 +58,9 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import kotlin.math.roundToInt
 
-/** Estilo oscuro de OpenStreetMap vía teselas CARTO (con atribución). Cámbialo por tus propias teselas si quieres. */
-private val DARK_STYLE = """
-{
-  "version": 8,
-  "sources": { "osm": {
-      "type": "raster",
-      "tiles": ["https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-                "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png"],
-      "tileSize": 256,
-      "attribution": "© OpenStreetMap contributors © CARTO" } },
-  "layers": [ { "id": "osm", "type": "raster", "source": "osm" } ]
-}
-""".trimIndent()
+/** Estilos de OpenFreeMap (datos de OpenStreetMap, sin API key). */
+private const val DARK_STYLE_URL = "https://tiles.openfreemap.org/styles/dark"
+private const val FALLBACK_STYLE = "https://tiles.openfreemap.org/styles/liberty"
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -139,21 +129,30 @@ fun MapScreen() {
     LaunchedEffect(Unit) {
         mapView.getMapAsync { m ->
             map = m
-            m.setStyle(Style.Builder().fromJson(DARK_STYLE)) { style ->
-                style.addSource(GeoJsonSource("route"))
-                style.addLayer(
-                    LineLayer("route-line", "route").withProperties(
-                        lineColor(accentArgb), lineWidth(8f), lineCap("round"), lineJoin("round")
+            fun applyStyle(uri: String) {
+                m.setStyle(Style.Builder().fromUri(uri)) { style ->
+                    style.addSource(GeoJsonSource("route"))
+                    style.addLayer(
+                        LineLayer("route-line", "route").withProperties(
+                            lineColor(accentArgb), lineWidth(8f), lineCap("round"), lineJoin("round")
+                        )
                     )
-                )
-                style.addSource(GeoJsonSource("me"))
-                style.addLayer(
-                    CircleLayer("me-dot", "me").withProperties(
-                        circleRadius(9f), circleColor(0xFFFFFFFF.toInt()),
-                        circleStrokeColor(accentArgb), circleStrokeWidth(4f)
+                    style.addSource(GeoJsonSource("me"))
+                    style.addLayer(
+                        CircleLayer("me-dot", "me").withProperties(
+                            circleRadius(9f), circleColor(0xFFFFFFFF.toInt()),
+                            circleStrokeColor(accentArgb), circleStrokeWidth(4f)
+                        )
                     )
-                )
+                }
             }
+            // OpenFreeMap: mapa OpenStreetMap sin clave ni registro.
+            // Si el estilo oscuro no carga, cae al estilo claro.
+            var fellBack = false
+            mapView.addOnDidFailLoadingMapListener {
+                if (!fellBack) { fellBack = true; applyStyle(FALLBACK_STYLE) }
+            }
+            applyStyle(DARK_STYLE_URL)
             m.cameraPosition = CameraPosition.Builder().target(LatLng(10.48, -66.90)).zoom(11.0).build()
             m.addOnCameraMoveStartedListener { reason ->
                 if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) follow = false
